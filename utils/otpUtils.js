@@ -8,18 +8,31 @@ const generateOTP = () => {
 // Send OTP via Email using Nodemailer
 const sendEmailOTP = async (email, otp) => {
   try {
+    // Verify required env vars are present
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      throw new Error('EMAIL_USER or EMAIL_PASS is not set in environment variables');
+    }
+
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
+      host: 'smtp.gmail.com',
       port: 465,
-      secure: true, // use SSL
+      secure: true, // SSL
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        // Remove ALL spaces from app password (Gmail app passwords have spaces when copied)
+        pass: process.env.EMAIL_PASS.replace(/\s/g, '')
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false
+      }
     });
+
+    // Verify connection before sending
+    await transporter.verify();
+    console.log('✅ SMTP connection verified');
 
     const mailOptions = {
       from: `"NexusAuth 🚀" <${process.env.EMAIL_USER}>`,
@@ -50,11 +63,12 @@ const sendEmailOTP = async (email, otp) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log("✅ OTP Email sent successfully");
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ OTP Email sent successfully to:', email, '| MessageID:', info.messageId);
 
   } catch (error) {
-    console.error("❌ Email sending failed:", error);
+    console.error('❌ Email sending failed:', error.message);
+    // Re-throw so the route handler can return a proper 500 error
     throw error;
   }
 };
