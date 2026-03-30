@@ -1,7 +1,7 @@
 // ============================================================
-// otpUtils.js — Uses Resend API (works on Render free tier)
-// Render BLOCKS smtp ports 465/587, so nodemailer won't work.
-// Resend uses HTTPS port 443 which is always open.
+// otpUtils.js — Uses Brevo (Sendinblue) API
+// Works on Render free tier, sends to ANY email, no domain needed
+// Free plan: 300 emails/day
 // ============================================================
 
 const https = require('https');
@@ -11,11 +11,11 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Send email via Resend API (HTTPS - works on Render free tier)
+// Send email via Brevo API
 const sendEmailOTP = async (email, otp) => {
   return new Promise((resolve, reject) => {
-    if (!process.env.RESEND_API_KEY) {
-      return reject(new Error('RESEND_API_KEY is not set in environment variables'));
+    if (!process.env.BREVO_API_KEY) {
+      return reject(new Error('BREVO_API_KEY is not set in environment variables'));
     }
 
     const emailHTML = `
@@ -43,19 +43,22 @@ const sendEmailOTP = async (email, otp) => {
     `;
 
     const payload = JSON.stringify({
-      from: 'NexusAuth <onboarding@resend.dev>',
-      to: [email],
+      sender: {
+        name: 'NexusAuth',
+        email: process.env.BREVO_SENDER_EMAIL || 'naveensri.elsa@gmail.com'
+      },
+      to: [{ email: email }],
       subject: '🔐 Your NexusAuth Verification Code',
-      html: emailHTML
+      htmlContent: emailHTML
     });
 
     const options = {
-      hostname: 'api.resend.com',
+      hostname: 'api.brevo.com',
       port: 443,
-      path: '/emails',
+      path: '/v3/smtp/email',
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'api-key': process.env.BREVO_API_KEY,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload)
       }
@@ -68,20 +71,20 @@ const sendEmailOTP = async (email, otp) => {
         try {
           const parsed = JSON.parse(data);
           if (res.statusCode === 200 || res.statusCode === 201) {
-            console.log('✅ OTP Email sent via Resend to:', email, '| ID:', parsed.id);
+            console.log('✅ OTP Email sent via Brevo to:', email, '| ID:', parsed.messageId);
             resolve(parsed);
           } else {
-            console.error('❌ Resend API error:', parsed);
-            reject(new Error(parsed.message || 'Resend API error: ' + res.statusCode));
+            console.error('❌ Brevo API error:', JSON.stringify(parsed));
+            reject(new Error(parsed.message || 'Brevo API error: ' + res.statusCode));
           }
         } catch (e) {
-          reject(new Error('Failed to parse Resend response: ' + data));
+          reject(new Error('Failed to parse Brevo response: ' + data));
         }
       });
     });
 
     req.on('error', (err) => {
-      console.error('❌ Resend request failed:', err.message);
+      console.error('❌ Brevo request failed:', err.message);
       reject(err);
     });
 
